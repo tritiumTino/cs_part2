@@ -36,7 +36,7 @@ def host_range_ping() -> Dict[str, str]:
         else:
             break
     addr_to = addr_from + int(input("Введите количество адресов:"))
-    addr_list = [ipaddress.ip_address(i) for i in range(int(addr_from), int(addr_to)+1)]
+    addr_list = [ipaddress.ip_address(i) for i in range(int(addr_from), int(addr_to) + 1)]
     center = len(addr_list) // 2
     thread_1 = Thread(target=form_dict, args=(result_dict, addr_list[:center]))
     thread_2 = Thread(target=form_dict, args=(result_dict, addr_list[center:],))
