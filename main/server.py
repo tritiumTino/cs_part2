@@ -3,6 +3,7 @@ import select
 import socket
 import click
 
+from main.db.server_db import ServerDB
 from meta.metaclasses import ServerMeta
 from utils.port import Port
 from variables import (
@@ -29,9 +30,10 @@ logger = logging.getLogger('server')
 class Server(metaclass=ServerMeta):
     port = Port()
 
-    def __init__(self, addr: str, port: int) -> None:
+    def __init__(self, addr: str, port: int, database) -> None:
         self.addr = addr
         self.port = port
+        self.database = database
 
         self.clients = []
         self.messages = []
@@ -82,7 +84,7 @@ class Server(metaclass=ServerMeta):
                     del self.names[message[DESTINATION]]
             self.messages.clear()
 
-    def process_message(self, message, listen_socks):
+    def process_message(self, message: dict, listen_socks: list) -> None:
         if message[DESTINATION] in self.names and self.names[message[DESTINATION]] in listen_socks:
             send_message(self.names[message[DESTINATION]], message)
             logger.info(
@@ -93,10 +95,12 @@ class Server(metaclass=ServerMeta):
             logger.error(
                 f'Client {message[DESTINATION]} is not registered')
 
-    def process_client_message(self, message, client):
+    def process_client_message(self, message: dict, client) -> None:
         if ACTION in message and message[ACTION] == PRESENCE and TIME in message and USER in message:
             if message[USER][ACCOUNT_NAME] not in self.names.keys():
                 self.names[message[USER][ACCOUNT_NAME]] = client
+                client_ip, client_port = client.getpeername()
+                self.database.user_login(message[USER][ACCOUNT_NAME], client_ip, client_port)
                 send_message(client, RESPONSE_200)
             else:
                 response = RESPONSE_400
@@ -104,31 +108,29 @@ class Server(metaclass=ServerMeta):
                 send_message(client, response)
                 self.clients.remove(client)
                 client.close()
-            return
 
         elif ACTION in message and message[ACTION] == MESSAGE and DESTINATION in message and TIME in message \
                 and SENDER in message and MESSAGE_TEXT in message:
             self.messages.append(message)
-            return
 
         elif ACTION in message and message[ACTION] == EXIT and ACCOUNT_NAME in message:
+            self.database.user_logout(message[ACCOUNT_NAME])
             self.clients.remove(self.names[ACCOUNT_NAME])
             self.names[ACCOUNT_NAME].close()
             del self.names[ACCOUNT_NAME]
-            return
 
         else:
             response = RESPONSE_400
             response[ERROR] = 'Bad request'
             send_message(client, response)
-            return
 
 
 @click.command()
 @click.option('--addr', '-a', default=DEFAULT_IP_ADDRESS, help='IP address to listen to')
 @click.option('--port', '-p', default=DEFAULT_PORT, help='TCP-port')
 def run(addr: str, port: int) -> None:
-    server = Server(addr, port)
+    database = ServerDB()
+    server = Server(addr, port, database)
     server.loop()
 
 

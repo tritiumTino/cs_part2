@@ -70,7 +70,7 @@ class ClientSender(threading.Thread, metaclass=ClientMeta):
         print('exit - disconnect from server')
 
 
-class ClientReader(threading.Thread , metaclass=ClientMeta):
+class ClientReader(threading.Thread, metaclass=ClientMeta):
     def __init__(self, account_name, sock):
         self.account_name = account_name
         self.sock = sock
