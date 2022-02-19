@@ -8,7 +8,12 @@ class Port:
         self.name = name
 
     def __set__(self, instance, value: int):
-        if not isinstance(value, int) or not 1023 < value < 65536:
+        try:
+            value = int(value)
+        except TypeError:
+            logger.critical(f"The port must be an integer")
+            exit(1)
+        if not 1023 < value < 65536:
             logger.critical(f"The port with value {value} is not available")
             exit(1)
         instance.__dict__[self.name] = value

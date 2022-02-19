@@ -4,14 +4,12 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Foreign
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 
-from main.variables import SERVER_DATABASE
-
 
 class ServerDB:
     Base = declarative_base()
 
     class AllUsers(Base):
-        __tablename__ = 'all_users'
+        __tablename__ = 'Users'
         id = Column(Integer, primary_key=True)
         name = Column(String, unique=True, index=True)
         last_login = Column(DateTime)
@@ -21,9 +19,9 @@ class ServerDB:
             self.last_login = datetime.now()
 
     class ActiveUsers(Base):
-        __tablename__ = 'active_users'
+        __tablename__ = 'Active Users'
         id = Column(Integer, primary_key=True)
-        user_id = Column(Integer, ForeignKey('all_users.id'), unique=True)
+        user_id = Column(Integer, ForeignKey('Users.id'), unique=True)
         ip_address = Column(String)
         port = Column(Integer)
         login_time = Column(DateTime)
@@ -35,9 +33,9 @@ class ServerDB:
             self.login_time = login_time
 
     class LoginHistory(Base):
-        __tablename__ = 'login_history'
+        __tablename__ = 'Login History'
         id = Column(Integer, primary_key=True)
-        user_id = Column(Integer, ForeignKey('all_users.id'))
+        user_id = Column(Integer, ForeignKey('Users.id'))
         ip_address = Column(String)
         port = Column(Integer)
         login_time = Column(DateTime)
@@ -48,8 +46,35 @@ class ServerDB:
             self.port = port
             self.login_time = login_time
 
-    def __init__(self) -> None:
-        self.database_engine = create_engine(SERVER_DATABASE, echo=False, pool_recycle=7200)
+    class Contacts(Base):
+        __tablename__ = 'Contacts'
+        id = Column(Integer, primary_key=True)
+        user_id = Column(ForeignKey('Users.id'))
+        contact_id = Column(ForeignKey('Users.id'))
+
+        def __init__(self, user_id: int, contact_id: int) -> None:
+            self.user_id = user_id
+            self.contact_id = contact_id
+
+    class History(Base):
+        __tablename__ = "History"
+        id = Column(Integer, primary_key=True)
+        user_id = Column(ForeignKey('Users.id'))
+        sent = Column(Integer)
+        accepted = Column(Integer)
+
+        def __init__(self, user_id: int) -> None:
+            self.user_id = user_id
+            self.sent = 0
+            self.accepted = 0
+
+    def __init__(self, path) -> None:
+        self.database_engine = create_engine(
+            f'sqlite:///{path}',
+            echo=False,
+            pool_recycle=7200,
+            connect_args={'check_same_thread': False}
+        )
         self.Base.metadata.create_all(self.database_engine)
 
         Session = sessionmaker(bind=self.database_engine)
@@ -69,6 +94,8 @@ class ServerDB:
             user = self.AllUsers(name=username)
             self.session.add(user)
             self.session.commit()
+            user_history = self.History(user.id)
+            self.session.add(user_history)
 
         new_active_user = self.ActiveUsers(
             user_id=user.id,
@@ -114,4 +141,61 @@ class ServerDB:
         ).join(self.AllUsers)
         if username:
             query = query.filter(self.AllUsers.name == username)
+        return query.all()
+
+    def process_message(self, sender_name: str, recipient_name: str) -> None:
+        sender_id = self.session.query(self.AllUsers).filter_by(name=sender_name).first().id
+        recipient_id = self.session.query(self.AllUsers).filter_by(name=recipient_name).first().id
+
+        sender_row = self.session.query(self.History).filter_by(user_id=sender_id).first()
+        sender_row.sent += 1
+        recipient_row = self.session.query(self.History).filter_by(user_id=recipient_id).first()
+        recipient_row.accepted += 1
+
+        self.session.commit()
+
+    def add_contact(self, user_name: str, contact_name: str) -> None:
+        user = self.session.query(self.AllUsers).filter_by(name=user_name).first()
+        contact = self.session.query(self.AllUsers).filter_by(name=contact_name).first()
+
+        if not contact or self.session.query(self.Contacts).filter_by(
+                user_id=user.id,
+                contact_id=contact.id
+        ).count():
+            return
+
+        contact_row = self.Contacts(user.id, contact.id)
+        self.session.add(contact_row)
+        self.session.commit()
+
+    def remove_contact(self, user_name: str, contact_name: str) -> None:
+        user = self.session.query(self.AllUsers).filter_by(name=user_name).first()
+        contact = self.session.query(self.AllUsers).filter_by(name=contact_name).first()
+
+        if not contact:
+            return
+
+        self.session.query(self.Contacts).filter(
+            self.Contacts.user_id == user.id,
+            self.Contacts.contact_id == contact.id
+        ).delete()
+        self.session.commit()
+
+    def get_contacts(self, user_name: str) -> Optional[List[str]]:
+        user = self.session.query(self.AllUsers).filter_by(name=user_name).one()
+
+        query = self.session.query(
+            self.Contacts,
+            self.AllUsers.name
+        ).filter_by(user_id=user.id).join(self.AllUsers, self.Contacts.contact_id == self.AllUsers.id)
+
+        return [contact[1] for contact in query.all()]
+
+    def message_history(self) -> Optional[List[tuple]]:
+        query = self.session.query(
+            self.AllUsers.name,
+            self.AllUsers.last_login,
+            self.History.sent,
+            self.History.accepted
+        ).join(self.AllUsers)
         return query.all()

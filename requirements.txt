@@ -6,6 +6,9 @@ mccabe==0.6.1
 pycodestyle==2.8.0
 pydantic==1.9.0
 pyflakes==2.4.0
+PyQt5==5.15.6
+PyQt5-Qt5==5.15.2
+PyQt5-sip==12.9.1
 SQLAlchemy==1.4.31
 tabulate==0.8.9
 typing-extensions==4.0.1
