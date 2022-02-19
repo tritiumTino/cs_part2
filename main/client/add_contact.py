@@ -58,14 +58,3 @@ class AddContactDialog(QDialog):
         else:
             logger.debug('Updating the list of users from the server is done')
             self.possible_contacts_update()
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    from main.db.client_db import ClientDB
-    database = ClientDB('test1')
-    from transport import ClientTransport
-    transport = ClientTransport(7777, '127.0.0.1', database, 'test1')
-    window = AddContactDialog(transport, database)
-    window.show()
-    app.exec_()

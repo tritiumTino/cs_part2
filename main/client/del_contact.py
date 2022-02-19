@@ -35,14 +35,3 @@ class DelContactDialog(QDialog):
         self.btn_cancel.move(230, 60)
         self.btn_cancel.clicked.connect(self.close)
 
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    from main.db.client_db import ClientDB
-    database = ClientDB('test1')
-    window = DelContactDialog(database)
-    database.add_contact('test2')
-    print(database.get_contacts())
-    window.selector.addItems(sorted(database.get_contacts()))
-    window.show()
-    app.exec_()
